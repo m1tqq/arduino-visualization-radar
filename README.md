@@ -1,20 +1,43 @@
-# Arduino Radar
+# Arduino Radar Visualization
 
-A simple radar visualization system built with **Arduino** and **Python**.
+A real-time radar visualization system built using **Arduino** and **Python**.
 
-The project uses an **HC-SR04 ultrasonic sensor** mounted on a **servo motor** to scan the surrounding area. Distance measurements are transmitted to a Python application over serial communication, where they are processed and displayed in real time as a radar-style visualization.
+An **HC-SR04 ultrasonic sensor** mounted on a servo motor scans a 180° area and sends angle/distance measurements over a serial connection. A Python application processes the incoming data and visualizes the scan in real time using a polar radar-style display.
 
-> Developed as a university project. I implemented the Python application responsible for serial communication, data processing, and real-time radar visualization.
+> This project was developed as part of a university robotics course.
+>
+> My contribution focused on the Python side of the system: **serial communication, sensor data processing, simulation, and real-time radar visualization**.
 
 ---
 
 ## Features
 
 - 180° environment scanning using a servo motor
-- Distance measurement with the HC-SR04 ultrasonic sensor
-- Serial communication between Arduino and Python
-- Real-time radar visualization
-- Live object detection display
+- Distance measurement using an HC-SR04 ultrasonic sensor
+- Arduino-to-Python serial communication
+- Real-time polar radar visualization
+- Continuous visualization of detected objects
+- Simulation mode for testing the visualization without connected hardware
+
+---
+
+## How It Works
+
+The Arduino continuously rotates the ultrasonic sensor between **0° and 180°**.
+
+For every angle, it measures the distance to the nearest detected object and sends the measurement over the serial connection in the following format:
+
+```text
+angle,distance
+```
+
+Example:
+
+```text
+90,42
+```
+
+The Python application reads these measurements, stores the latest distance for each angle, and updates a Matplotlib polar plot in real time.
 
 ---
 
@@ -29,7 +52,9 @@ The project uses an **HC-SR04 ultrasonic sensor** mounted on a **servo motor** t
 
 ## Software
 
+- Arduino / C++
 - Python 3
+- NumPy
 - Matplotlib
 - PySerial
 
@@ -37,30 +62,58 @@ The project uses an **HC-SR04 ultrasonic sensor** mounted on a **servo motor** t
 
 ## Project Structure
 
-```
-.
-├── arduino_radar.ino
-├── radar_serial.py
-└── README.md
+```text
+arduino_radar/
+├── arduino_radar/
+│   └── arduino_radar.ino    # Arduino sensor and servo control
+├── radar_serial.py          # Serial communication and live visualization
+└── radar_sim.py             # Visualization simulation without hardware
 ```
 
 ---
 
-## Getting Started
+## Running the Project
 
-1. Connect the Arduino board to your computer.
-2. Upload `arduino_radar.ino` to the Arduino.
-3. Update the serial port inside `radar_serial.py` if necessary.
-4. Install the required Python packages:
+### 1. Arduino
 
-```bash
-pip install matplotlib pyserial
+Connect the components to the Arduino and upload:
+
+```text
+arduino_radar/arduino_radar/arduino_radar.ino
 ```
 
-5. Run the application:
+The Arduino sends measurements over serial at **9600 baud**.
+
+### 2. Python dependencies
+
+Install the required packages:
 
 ```bash
-python radar_serial.py
+pip install numpy matplotlib pyserial
+```
+
+### 3. Serial port
+
+Update the serial port in `radar_serial.py` if necessary:
+
+```python
+PORT = "/dev/tty.usbmodem1201"
+```
+
+### 4. Run the live visualization
+
+```bash
+python arduino_radar/radar_serial.py
+```
+
+---
+
+## Simulation
+
+The visualization can also be tested without physical hardware using randomly generated radar measurements:
+
+```bash
+python arduino_radar/radar_sim.py
 ```
 
 ---
@@ -87,8 +140,4 @@ https://drive.google.com/file/d/11c58CotUJq63cRjXeROMKPzh5b8_gLaZ/view?usp=shari
 
 ## Technologies
 
-- Arduino
-- Python
-- Matplotlib
-- PySerial
-- Serial Communication
+`Arduino` · `C++` · `Python` · `NumPy` · `Matplotlib` · `PySerial` · `Serial Communication`
