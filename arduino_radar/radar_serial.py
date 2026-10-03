@@ -1,54 +1,92 @@
-import serial
+"""Live radar: reads "angle,distance" lines from the Arduino over serial and
+plots them in real time.
+
+    python radar_serial.py                 # find the Arduino automatically
+    python radar_serial.py --port COM3     # or name the port explicitly
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
 import time
-import numpy as np
-import matplotlib.pyplot as plt
 
-PORT = "/dev/tty.usbmodem1201"
+import serial
+from serial.tools import list_ports
+
+from radar import RadarDisplay, parse_measurement
+
+DEFAULT_PORT = "/dev/tty.usbmodem1201"
 BAUD = 9600
-MAX_RANGE = 200
+REDRAW_INTERVAL = 0.05  # seconds between plot updates
 
-ser = serial.Serial(PORT, BAUD, timeout=1)
-time.sleep(2)
+# Words that identify an Arduino (or a common USB-serial clone) in port listings.
+ARDUINO_HINTS = ("arduino", "usbmodem", "ttyacm", "ch340", "usb serial", "wchusbserial")
 
-plt.ion()
-fig = plt.figure()
-ax = fig.add_subplot(111, projection="polar")
-ax.set_theta_zero_location("N")
-ax.set_theta_direction(-1)
-ax.set_rlim(0, MAX_RANGE)
 
-angles = np.arange(0, 181)
-distances = np.full(181, np.nan)
-line_plot, = ax.plot([], [], lw=2)
+def find_arduino_port() -> str | None:
+    """Returns the first serial port that looks like an Arduino, if any."""
+    for port in list_ports.comports():
+        text = " ".join(filter(None, [port.device, port.description, port.manufacturer])).lower()
+        if any(hint in text for hint in ARDUINO_HINTS):
+            return port.device
+    return None
 
-def redraw():
-    line_plot.set_data(np.deg2rad(angles), distances)
-    fig.canvas.draw()
-    fig.canvas.flush_events()
 
-try:
+def available_ports() -> str:
+    ports = [f"  {p.device}  ({p.description})" for p in list_ports.comports()]
+    return "\n".join(ports) if ports else "  (none found)"
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Live radar visualization for the Arduino radar.")
+    parser.add_argument("--port", help="serial port of the Arduino, e.g. COM3 or /dev/ttyACM0 "
+                                       "(default: detected automatically)")
+    parser.add_argument("--baud", type=int, default=BAUD, help=f"baud rate (default: {BAUD})")
+    args = parser.parse_args()
+
+    port = args.port or find_arduino_port() or DEFAULT_PORT
+
+    try:
+        connection = serial.Serial(port, args.baud, timeout=1)
+    except serial.SerialException as error:
+        print(f"Could not open serial port {port}: {error}", file=sys.stderr)
+        print(f"Available ports:\n{available_ports()}", file=sys.stderr)
+        print("Use --port to choose one.", file=sys.stderr)
+        return 1
+
+    print(f"Reading from {port} at {args.baud} baud. Close the window or press Ctrl+C to stop.")
+
+    # Opening the port resets the Arduino; give it time to start sending.
+    time.sleep(2)
+
+    # Drop anything received so far and the next (possibly cut-off) line, so a
+    # partial line such as "0,4" from "90,42" is never taken as a measurement.
+    connection.reset_input_buffer()
+    connection.readline()
+
+    radar = RadarDisplay()
     last_draw = time.time()
-    while True:
-        raw = ser.readline().decode("utf-8", errors="ignore").strip()
-        if not raw:
-            continue
 
-        parts = raw.split(",")
-        if len(parts) != 2:
-            continue
+    try:
+        with connection:
+            while radar.is_open():
+                raw = connection.readline().decode("utf-8", errors="ignore")
+                measurement = parse_measurement(raw)
+                if measurement is not None:
+                    radar.update(*measurement)
 
-        try:
-            angle = int(parts[0])
-            dist = float(parts[1])
-        except ValueError:
-            continue
+                if time.time() - last_draw > REDRAW_INTERVAL:
+                    radar.redraw()
+                    last_draw = time.time()
+    except KeyboardInterrupt:
+        pass
+    except serial.SerialException as error:
+        print(f"Serial connection lost: {error}", file=sys.stderr)
+        return 1
 
-        if 0 <= angle <= 180:
-            distances[angle] = dist
+    return 0
 
-        if time.time() - last_draw > 0.05:
-            redraw()
-            last_draw = time.time()
 
-except KeyboardInterrupt:
-    ser.close()
+if __name__ == "__main__":
+    sys.exit(main())
